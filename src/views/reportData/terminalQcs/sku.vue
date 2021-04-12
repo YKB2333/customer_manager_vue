@@ -1,0 +1,214 @@
+<template>
+  <div>
+    <my-table v-model="searchQuery" :searchForm="searchForm" @change="onChange">
+      <!-- 插槽内容 -->
+      <div slot="before-table">
+        <div class="pb10">
+          <el-button v-permission-button="'export'" type="primary" style="margin-right:500px" @click="onExportClick">导出</el-button>
+          <el-date-picker
+            @change="onStartDateChange"
+            v-model="startTime"
+            type="week"
+            format="yyyy 第 WW 周"
+            placeholder="选择开始周"
+            :picker-options="{'firstDayOfWeek': 1}">
+          </el-date-picker>
+          <el-date-picker
+            @change="onEndDateChange"
+            v-model="startEnd"
+            type="week"
+            format="yyyy 第 WW 周"
+            :picker-options="{'firstDayOfWeek': 1}"
+            placeholder="选择结束周">
+          </el-date-picker>
+        </div>
+      </div>
+
+      <el-table
+        :data="tableData"
+        border stripe
+        v-loading="tableLoading"
+        element-loading-text="拼命加载中">
+        <el-table-column label="商品名称"  prop="skuName" width="400"></el-table-column>
+        <el-table-column label="NC编码"  prop="ncCode"   width="200"></el-table-column>
+        <el-table-column label="品牌"  prop="brandName" width="150"></el-table-column>
+        <el-table-column label="数量" sortable prop="num" width="150" ></el-table-column>
+        <el-table-column label="含税额" sortable prop="saleContainTax" width="150"  ></el-table-column>
+      </el-table>
+    </my-table>
+
+     <!--弹窗-->
+    <!-- 附件列表弹窗 -->
+
+  </div>
+</template>
+
+<script>
+import UploadImage from "@/components/UploadImage"
+import Download from '@/components/Download'
+import { getQcsReportSkuList} from '@/api/reportData'
+import {getDate} from '@/utils/tools'
+export default {
+  name: "reportData",
+  components: {UploadImage, Download},
+  data() {
+    return {
+      searchForm: [
+
+        {
+          key: 'ncCode',
+          placeholder: 'NC编码',
+          type: "input"
+        },
+        {
+          key: 'skuName',
+          placeholder: '商品名称',
+          type: "input"
+        },
+        {
+          key: 'brandName',
+          placeholder: '品牌',
+          type: "input"
+        },
+      ],
+      times:[],
+      startTime:'',
+      startEnd:'',
+      tableLoading: false,
+      searchQuery: {
+        startWeek: 0,
+        endWeek: 1000000,
+        pageIndex: 1,
+        pageSize: 10,
+        total: 0, // 总条数
+      },
+      docDialog: {
+        dialogVisible: false,
+        dialogType: "",
+        attachmenList: [],
+        uploadLoading: false
+      },
+
+      tableData: [],
+      ruleForm: {
+        storeNumber: "",
+        skuName: "",
+        brandName: "",
+        num: "",
+        sale: '',
+
+      },
+    }
+  },
+  created() {
+    this.fetchTableData()
+  },
+  computed: {
+
+  },
+  methods: {
+
+    onChange() {
+      this.fetchTableData()
+    },
+    onStartDateChange(value) {
+      if (value){
+        this.searchQuery.startWeek=`${value.getFullYear()}${this.$moment(value).week()}`
+      }else {
+        this.searchQuery.startWeek=0
+      }
+    },
+    onEndDateChange(value) {
+      if(value) {
+        this.searchQuery.endWeek=`${value.getFullYear()}${this.$moment(value).week()}`
+      }else {
+        this.searchQuery.endWeek=1000000
+      }
+    },
+    // 加载表格数据
+    async fetchTableData() {
+      try {
+        this.tableLoading = true
+        let res = await this.fetchBrandList()
+        this.searchQuery.total = res.count // 总条数
+        this.tableData = res.list // 报表数据数据
+      } catch (error) {
+        console.log('catch', error)
+      } finally {
+        this.tableLoading = false
+      }
+    },
+    // 获取报表数据列表
+    fetchBrandList() {
+      return new Promise((resolve, reject) => {
+        getQcsReportSkuList(this.searchQuery)
+          .then(res => {
+            resolve(res)
+          }).catch(error => {
+          reject(error)
+        })
+      })
+    },
+    showUploadAtta(row) {
+      this.docDialog.dialogType = "uploadAtta"
+      this.docDialog.dialogVisible = true
+    },
+
+    // 导出Excel
+    onExportClick() {
+      // 导出
+      let formatJson = (filterVal, jsonData) => {
+        return jsonData.map(v =>
+          filterVal.map(j => {
+            if (j === "orderTime") {
+              return this.formatDates(v[j], 'Y/M/D ')
+            }else {
+              return v[j]
+            }
+          })
+        )
+      }
+      this.$store.commit("SHOW_LOADING", "正在导出Excel")
+      let params = this.$lodash.cloneDeep(this.searchQuery)
+      params["pageIndex"] = 1
+      params["pageSize"] = this.$maxNumber
+      getQcsReportSkuList(params)
+        .then(res => {
+          let listData = res.list
+          import("@/utils/excel/Export2Excel").then(excel => {
+            const tHeader = [
+              "店铺号",
+              "门店名",
+              "品牌",
+              "含税额",
+              "数量"
+            ]
+            const filterVal = [
+              "ncCode",
+              "skuName",
+              "brandName",
+              "saleContainTax",
+              "num",
+            ]
+            const list = listData
+            const data = formatJson(filterVal, list)
+            excel.export_json_to_excel({
+              header: tHeader,
+              data,
+              filename: "报表"
+            })
+            // excel.export_table_to_excel('table', '品牌')
+          })
+        })
+        .finally(() => {
+          this.$store.commit("SHOW_LOADING", false)
+        })
+    },
+    onRemoveUpload(file) {
+      console.log(file)
+
+    },
+
+  }
+}
+</script>

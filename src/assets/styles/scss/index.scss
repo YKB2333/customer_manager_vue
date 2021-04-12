@@ -1,0 +1,17 @@
+@import './common/base.scss';
+@import './common/layout.scss';
+
+.align-self-start{
+  align-self: start;
+}
+
+.custom-super-dialog{
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+// tooltip \r\n 换行显示
+.el-tooltip__popper{
+  white-space: pre-line !important;
+}
+
